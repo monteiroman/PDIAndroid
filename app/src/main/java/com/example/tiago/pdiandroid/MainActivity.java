@@ -2,14 +2,20 @@ package com.example.tiago.pdiandroid;
 
 import android.app.Activity;
 
+import android.content.Intent;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.SurfaceView;
 import android.view.WindowManager;
 import android.widget.TextView;
+
+import com.google.android.gms.vision.Frame;
+import com.google.android.gms.vision.barcode.Barcode;
+import com.google.android.gms.vision.barcode.BarcodeDetector;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
@@ -34,6 +40,7 @@ import org.opencv.features2d.DescriptorMatcher;
 import org.opencv.features2d.FeatureDetector;
 import org.opencv.features2d.Features2d;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.videoio.VideoCapture;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -42,6 +49,18 @@ import java.util.LinkedList;
 import java.util.List;
 
 import static org.opencv.core.CvType.CV_16S;
+import static org.opencv.videoio.Videoio.CV_CAP_PROP_FRAME_HEIGHT;
+import static org.opencv.videoio.Videoio.CV_CAP_PROP_FRAME_WIDTH;
+
+
+
+/*__________________________________________________________//
+
+Usar matchShapes
+
+
+
+//__________________________________________________________*/
 
 public class MainActivity extends Activity implements CameraBridgeViewBase.CvCameraViewListener2{
 
@@ -65,6 +84,13 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     List<MatOfPoint> squares = new ArrayList<MatOfPoint>();
     int thresh = 50, N = 11;
     Mat smallerImg, gray, gray0;
+
+    VideoCapture mCamera;
+    TextView txtView;
+    Bitmap myBitmap;
+
+
+
 
     static {
         if (!OpenCVLoader.initDebug())
@@ -116,15 +142,22 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.layout);
 
+        //mCamera = new VideoCapture();
+        //mCamera.set(CV_CAP_PROP_FRAME_WIDTH, 640);
+        //mCamera.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
+
 //        requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.tutorial1_activity_java_surface_view);
+        //mOpenCvCameraView.setMaxFrameSize(1024, 860);
+
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
-        //tvName = (TextView) findViewById(R.id.text1);
 
+        //tvName = (TextView) findViewById(R.id.text1);
+        //txtView = (TextView) findViewById(R.id.txtContent);
     }
 
     @Override
@@ -164,18 +197,48 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
         Mat aInputFrame = inputFrame.rgba();
-        Mat aux;
+        /*Mat aux;
 
         aux = detectBarCode(aInputFrame.clone());
 
         findSquares(aux, squares);
 
-        Imgproc.drawContours(aInputFrame, squares, -1, new Scalar(0,255,0), 3);
+        Imgproc.drawContours(aInputFrame, squares, -1, new Scalar(0,255,0), 3);*/
 
         //return aux;
+
+
+
+
+        myBitmap = Bitmap.createBitmap(aInputFrame.cols(),  aInputFrame.rows(),Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(aInputFrame, myBitmap);
+
+        BarcodeDetector detector = new BarcodeDetector.Builder(getApplicationContext())
+                        .setBarcodeFormats(Barcode.DATA_MATRIX | Barcode.QR_CODE)
+                        .build();
+        if(!detector.isOperational()){
+            txtView.setText("Could not set up the detector!");
+        }
+
+        Frame frame = new Frame.Builder().setBitmap(myBitmap).build();
+        SparseArray<Barcode> barcodes = detector.detect(frame);
+
+
+        if(barcodes.size()==0){
+            //txtView.setText("No se detecto un codigo");
+            Log.d(TAG, "No se econtró codigo");
+        }else {
+            Barcode thisCode = barcodes.valueAt(0);
+            //txtView.setText(thisCode.rawValue);
+            Log.d(TAG, thisCode.rawValue);
+            final Intent intent = new Intent(this, ShowText.class);
+            intent.putExtra("text", thisCode.rawValue);
+            startActivity(intent);
+        }
+
+
         return aInputFrame;
     }
-
 
     Mat detectBarCode (Mat aInputFrame){
 
@@ -183,7 +246,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
         int scale = 1;
         int delta = 0;
 
-        org.opencv.core.Size s = new Size(3,3);
+        org.opencv.core.Size s = new Size(5,5);
         Imgproc.GaussianBlur(aInputFrame, aInputFrame, s, 0, 0);
         Imgproc.cvtColor(aInputFrame, aInputFrame, Imgproc.COLOR_RGB2GRAY);
 
@@ -192,15 +255,16 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
         Core.subtract(grad_X, grad_Y, abs_grad);
         Core.convertScaleAbs(abs_grad, abs_grad);
+        //Core.convertScaleAbs(grad_X, abs_grad);
 
         org.opencv.core.Size s2 = new Size(5,5);
         Imgproc.GaussianBlur(abs_grad, abs_grad, s2, 0, 0);
         Imgproc.threshold(abs_grad, thres_out, 230, 255, 0);
 
 
-        Imgproc.morphologyEx(thres_out, morph_out, Imgproc.MORPH_CLOSE, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(40,10)));
+        Imgproc.morphologyEx(thres_out, morph_out, Imgproc.MORPH_CLOSE, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(30,1)));
 
-        Imgproc.erode(morph_out, morph_out, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(10,2)));
+        Imgproc.erode(morph_out, morph_out, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2,2)));
         Imgproc.dilate(morph_out, aInputFrame, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(1,1)));
 
         return aInputFrame;
