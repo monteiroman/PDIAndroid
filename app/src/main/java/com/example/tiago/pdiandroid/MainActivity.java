@@ -33,6 +33,7 @@ import org.opencv.core.MatOfKeyPoint;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.features2d.DescriptorExtractor;
@@ -40,6 +41,7 @@ import org.opencv.features2d.DescriptorMatcher;
 import org.opencv.features2d.FeatureDetector;
 import org.opencv.features2d.Features2d;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.utils.Converters;
 import org.opencv.videoio.VideoCapture;
 
 import java.io.IOException;
@@ -65,6 +67,8 @@ Usar matchShapes
 public class MainActivity extends Activity implements CameraBridgeViewBase.CvCameraViewListener2{
 
     private static final String TAG = "OCVSample::Activity";
+    private static final int SUBMATWIDTH = 500;
+    private static final int SUBMATHEIGHT = 300;
     private int w, h;
     private CameraBridgeViewBase mOpenCvCameraView;
     TextView tvName;
@@ -81,6 +85,9 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     Mat abs_grad = new Mat();
     Mat thres_out = new Mat();
     Mat morph_out = new Mat();
+    Mat aInputFrame = new Mat();
+    Mat bInputFrame = new Mat();
+    Mat cInputFrame = new Mat();
     List<MatOfPoint> squares = new ArrayList<MatOfPoint>();
     int thresh = 50, N = 11;
     Mat smallerImg, gray, gray0;
@@ -196,20 +203,25 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
-        Mat aInputFrame = inputFrame.rgba();
-        /*Mat aux;
+        aInputFrame = inputFrame.rgba();
+        bInputFrame = aInputFrame.clone();
+        cInputFrame = aInputFrame.clone();
+        Mat aux;
 
-        aux = detectBarCode(aInputFrame.clone());
+        //1-------------If i want to detect the barcode
+        //aux = detectBarCode(aInputFrame.clone());
+        //findSquares(aux, squares);
 
-        findSquares(aux, squares);
+        //2-------------If I dont want to detect the barcode
+        //findSquares(inputFrame.gray(), squares);
 
-        Imgproc.drawContours(aInputFrame, squares, -1, new Scalar(0,255,0), 3);*/
+        //Imgproc.drawContours(aInputFrame, squares, -1, new Scalar(0,255,0), 3);
 
         //return aux;
 
 
-
-
+        //3-------------If i want to use google's android vision API's
+        /*
         myBitmap = Bitmap.createBitmap(aInputFrame.cols(),  aInputFrame.rows(),Bitmap.Config.ARGB_8888);
         Utils.matToBitmap(aInputFrame, myBitmap);
 
@@ -235,139 +247,265 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
             intent.putExtra("text", thisCode.rawValue);
             startActivity(intent);
         }
+        */
+
+        Imgproc.cvtColor(aInputFrame, aInputFrame, Imgproc.COLOR_BGR2GRAY);
+
+        //convert the image to black and white does (8 bit)
+        Imgproc.Canny(aInputFrame, aInputFrame, 50, 50);
+
+        //apply gaussian blur to smoothen lines of dots
+        Imgproc.GaussianBlur(aInputFrame, aInputFrame, new  org.opencv.core.Size(5, 5), 5);
+
+        //find the contours
+        List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
+        Imgproc.findContours(aInputFrame, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
 
 
-        return aInputFrame;
+
+        if (!contours.isEmpty()) {
+
+
+            double maxArea = -1;
+            MatOfPoint temp_contour = contours.get(0);  // the largest is at the
+                                                        // index 0 for starting
+                                                        // point
+            MatOfPoint2f approxCurve = new MatOfPoint2f();
+
+            for (int idx = 0; idx < contours.size(); idx++) {
+                temp_contour = contours.get(idx);
+                double contourarea = Imgproc.contourArea(temp_contour);
+
+                // compare this contour to the previous largest contour found
+                if (contourarea > maxArea) {
+                    // check if this contour is a square
+                    MatOfPoint2f new_mat = new MatOfPoint2f(temp_contour.toArray());
+                    int contourSize = (int) temp_contour.total();
+                    MatOfPoint2f approxCurve_temp = new MatOfPoint2f();
+                    Imgproc.approxPolyDP(new_mat, approxCurve_temp, contourSize * 0.05, true);
+                    
+                    if (approxCurve_temp.total() == 4) {
+                        maxArea = contourarea;
+                        approxCurve = approxCurve_temp;
+                    }
+                }
+            }
+
+            //Imgproc.cvtColor(imgSource, imgSource, Imgproc.COLOR_BayerBG2RGB);
+            //Mat sourceImage = Highgui.imread(fileName, Highgui.CV_LOAD_IMAGE_UNCHANGED);
+            double[] temp_double;
+            temp_double = approxCurve.get(0, 0);
+            Point p1 = new Point(temp_double[0], temp_double[1]);
+            // Core.circle(imgSource,p1,55,new Scalar(0,0,255));
+            // Imgproc.warpAffine(sourceImage, dummy, rotImage,sourceImage.size());
+            temp_double = approxCurve.get(1, 0);
+            Point p2 = new Point(temp_double[0], temp_double[1]);
+            // Core.circle(imgSource,p2,150,new Scalar(255,255,255));
+            temp_double = approxCurve.get(2, 0);
+            Point p3 = new Point(temp_double[0], temp_double[1]);
+            // Core.circle(imgSource,p3,200,new Scalar(255,0,0));
+            temp_double = approxCurve.get(3, 0);
+            Point p4 = new Point(temp_double[0], temp_double[1]);
+            // Core.circle(imgSource,p4,100,new Scalar(0,0,255));
+            List<Point> source = new ArrayList<Point>();
+            source.add(p1);
+            source.add(p2);
+            source.add(p3);
+            source.add(p4);
+            Mat startM = Converters.vector_Point2f_to_Mat(source);
+
+            //if (maxArea > 0)
+                bInputFrame = warp(bInputFrame, startM);
+
+            //Highgui.imwrite("corrected.jpg", result);
+
+
+        }
+
+        cInputFrame = subMat(cInputFrame, bInputFrame);
+
+        return cInputFrame;
     }
 
-    Mat detectBarCode (Mat aInputFrame){
-
-        int ddepth = CV_16S;
-        int scale = 1;
-        int delta = 0;
-
-        org.opencv.core.Size s = new Size(5,5);
-        Imgproc.GaussianBlur(aInputFrame, aInputFrame, s, 0, 0);
-        Imgproc.cvtColor(aInputFrame, aInputFrame, Imgproc.COLOR_RGB2GRAY);
-
-        Imgproc.Scharr(aInputFrame, grad_X, ddepth, 1, 0, scale, delta);
-        Imgproc.Scharr(aInputFrame, grad_Y, ddepth, 0, 1, scale, delta);
-
-        Core.subtract(grad_X, grad_Y, abs_grad);
-        Core.convertScaleAbs(abs_grad, abs_grad);
-        //Core.convertScaleAbs(grad_X, abs_grad);
-
-        org.opencv.core.Size s2 = new Size(5,5);
-        Imgproc.GaussianBlur(abs_grad, abs_grad, s2, 0, 0);
-        Imgproc.threshold(abs_grad, thres_out, 230, 255, 0);
-
-
-        Imgproc.morphologyEx(thres_out, morph_out, Imgproc.MORPH_CLOSE, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(30,1)));
-
-        Imgproc.erode(morph_out, morph_out, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2,2)));
-        Imgproc.dilate(morph_out, aInputFrame, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(1,1)));
-
-        return aInputFrame;
-    }
+//    Mat detectBarCode (Mat aInputFrame){
+//
+//        int ddepth = CV_16S;
+//        int scale = 1;
+//        int delta = 0;
+//
+//        org.opencv.core.Size s = new Size(5,5);
+//        Imgproc.GaussianBlur(aInputFrame, aInputFrame, s, 0, 0);
+//        Imgproc.cvtColor(aInputFrame, aInputFrame, Imgproc.COLOR_RGB2GRAY);
+//
+//        Imgproc.Scharr(aInputFrame, grad_X, ddepth, 1, 0, scale, delta);
+//        Imgproc.Scharr(aInputFrame, grad_Y, ddepth, 0, 1, scale, delta);
+//
+//        Core.subtract(grad_X, grad_Y, abs_grad);
+//        Core.convertScaleAbs(abs_grad, abs_grad);
+//        //Core.convertScaleAbs(grad_X, abs_grad);
+//
+//        org.opencv.core.Size s2 = new Size(5,5);
+//        Imgproc.GaussianBlur(abs_grad, abs_grad, s2, 0, 0);
+//        Imgproc.threshold(abs_grad, thres_out, 230, 255, 0);
+//
+//
+//        Imgproc.morphologyEx(thres_out, morph_out, Imgproc.MORPH_CLOSE, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(30,1)));
+//
+//        Imgproc.erode(morph_out, morph_out, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2,2)));
+//        Imgproc.dilate(morph_out, aInputFrame, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(1,1)));
+//
+//        return aInputFrame;
+//    }
 
 
     // returns sequence of squares detected on the image.
     // the sequence is stored in the specified memory storage
-    void findSquares( Mat image, List<MatOfPoint> squares )
-    {
-        squares.clear();
-
-        smallerImg=new Mat(new Size(image.width()/2, image.height()/2),image.type());
-
-        gray=new Mat(image.size(),image.type());
-
-        gray0=new Mat(image.size(), CvType.CV_8U);
-
-        // down-scale and upscale the image to filter out the noise
-        Imgproc.pyrDown(image, smallerImg, smallerImg.size());
-        Imgproc.pyrUp(smallerImg, image, image.size());
-
-        gray = image;
-
-        //Cany removed... Didn't work so well
-
-        Imgproc.threshold(gray, gray0, 230, 255, Imgproc.THRESH_BINARY);
-
-        List<MatOfPoint> contours=new ArrayList<MatOfPoint>();
-
-        // find contours and store them all as a list
-        Imgproc.findContours(gray0, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
-
-        MatOfPoint approx=new MatOfPoint();
-
-        // test each contour
-        for( int i = 0; i < contours.size(); i++ )
-        {
-
-            // approximate contour with accuracy proportional
-            // to the contour perimeter
-            approx = approxPolyDP(contours.get(i),  Imgproc.arcLength(new MatOfPoint2f(contours.get(i).toArray()), true)*0.02, true);
-
-
-            // square contours should have 4 vertices after approximation
-            // relatively large area (to filter out noisy contours)
-            // and be convex.
-            // Note: absolute value of an area is used because
-            // area may be positive or negative - in accordance with the
-            // contour orientation
-
-            if( approx.toArray().length == 4 &&
-                    Math.abs(Imgproc.contourArea(approx)) > 1000 &&
-                    Imgproc.isContourConvex(approx) )
-            {
-                double maxCosine = 0;
-
-                for( int j = 2; j < 5; j++ )
-                {
-                    // find the maximum cosine of the angle between joint edges
-                    double cosine = Math.abs(angle(approx.toArray()[j%4], approx.toArray()[j-2], approx.toArray()[j-1]));
-                    maxCosine = Math.max(maxCosine, cosine);
-                }
-
-                // if cosines of all angles are small
-                // (all angles are ~90 degree) then write quandrange
-                // vertices to resultant sequence
-                if( maxCosine < 0.3 )
-                    squares.add(approx);
-            }
-
-        }
-    }
+//    void findSquares( Mat image, List<MatOfPoint> squares )
+//    {
+//        squares.clear();
+//
+//        smallerImg=new Mat(new Size(image.width()/2, image.height()/2),image.type());
+//
+//        gray=new Mat(image.size(),image.type());
+//
+//        gray0=new Mat(image.size(),CvType.CV_8U);
+//
+//        // down-scale and upscale the image to filter out the noise
+//        Imgproc.pyrDown(image, smallerImg, smallerImg.size());
+//        Imgproc.pyrUp(smallerImg, image, image.size());
+//
+//        gray = image;
+//
+//        //Cany removed... Didn't work so well
+//
+//        Imgproc.threshold(gray, gray0, 90, 255, Imgproc.THRESH_BINARY);
+//
+//        List<MatOfPoint> contours=new ArrayList<MatOfPoint>();
+//
+//        // find contours and store them all as a list
+//        Imgproc.findContours(gray0, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+//
+//        MatOfPoint approx=new MatOfPoint();
+//
+//        // test each contour
+//        for( int i = 0; i < contours.size(); i++ )
+//        {
+//
+//            // approximate contour with accuracy proportional
+//            // to the contour perimeter
+//            approx = approxPolyDP(contours.get(i),  Imgproc.arcLength(new MatOfPoint2f(contours.get(i).toArray()), true)*0.02, true);
+//
+//
+//            // square contours should have 4 vertices after approximation
+//            // relatively large area (to filter out noisy contours)
+//            // and be convex.
+//            // Note: absolute value of an area is used because
+//            // area may be positive or negative - in accordance with the
+//            // contour orientation
+//
+//            if( approx.toArray().length == 4 &&
+//                    Math.abs(Imgproc.contourArea(approx)) > 1000 &&
+//                    Imgproc.isContourConvex(approx) )
+//            {
+//                double maxCosine = 0;
+//
+//                for( int j = 2; j < 5; j++ )
+//                {
+//                    // find the maximum cosine of the angle between joint edges
+//                    double cosine = Math.abs(angle(approx.toArray()[j%4], approx.toArray()[j-2], approx.toArray()[j-1]));
+//                    maxCosine = Math.max(maxCosine, cosine);
+//                }
+//
+//                // if cosines of all angles are small
+//                // (all angles are ~90 degree) then write quandrange
+//                // vertices to resultant sequence
+//                if( maxCosine < 0.3 )
+//                    squares.add(approx);
+//            }
+//
+//        }
+//    }
 
     // helper function:
     // finds a cosine of angle between vectors
     // from pt0->pt1 and from pt0->pt2
-    double angle( Point pt1, Point pt2, Point pt0 ) {
-        double dx1 = pt1.x - pt0.x;
-        double dy1 = pt1.y - pt0.y;
-        double dx2 = pt2.x - pt0.x;
-        double dy2 = pt2.y - pt0.y;
-        return (dx1*dx2 + dy1*dy2)/Math.sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10);
+//    double angle( Point pt1, Point pt2, Point pt0 ) {
+//        double dx1 = pt1.x - pt0.x;
+//        double dy1 = pt1.y - pt0.y;
+//        double dx2 = pt2.x - pt0.x;
+//        double dy2 = pt2.y - pt0.y;
+//        return (dx1*dx2 + dy1*dy2)/Math.sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10);
+//    }
+
+//   void extractChannel(Mat source, Mat out, int channelNum) {
+//        List<Mat> sourceChannels=new ArrayList<Mat>();
+//        List<Mat> outChannel=new ArrayList<Mat>();
+//
+//        Core.split(source, sourceChannels);
+//
+//        outChannel.add(new Mat(sourceChannels.get(0).size(),sourceChannels.get(0).type()));
+//
+//        Core.mixChannels(sourceChannels, outChannel, new MatOfInt(channelNum,0));
+//
+//        Core.merge(outChannel, out);
+//    }
+
+//    MatOfPoint approxPolyDP(MatOfPoint curve, double epsilon, boolean closed) {
+//        MatOfPoint2f tempMat=new MatOfPoint2f();
+//
+//        Imgproc.approxPolyDP(new MatOfPoint2f(curve.toArray()), tempMat, epsilon, closed);
+//
+//        return new MatOfPoint(tempMat.toArray());
+//    }
+
+
+    Mat subMat (Mat bigMat, Mat smallMat){
+        Rect roi = new Rect(50, 50, SUBMATWIDTH, SUBMATHEIGHT);
+        Mat sub = bigMat.submat(roi);
+        smallMat.copyTo(sub);
+        return bigMat;
     }
 
- /*   void extractChannel(Mat source, Mat out, int channelNum) {
-        List<Mat> sourceChannels=new ArrayList<Mat>();
-        List<Mat> outChannel=new ArrayList<Mat>();
+    public static Mat warp(Mat inputMat, Mat startM) {
 
-        Core.split(source, sourceChannels);
+        int resultWidth = SUBMATWIDTH;
+        int resultHeight = SUBMATHEIGHT;
+//        int resultWidth = 1440;
+//        int resultHeight = 1080;
+//        int resultWidth = 1200;
+//        int resultHeight = 680;
 
-        outChannel.add(new Mat(sourceChannels.get(0).size(),sourceChannels.get(0).type()));
+        Point ocvPOut1 = new Point(0, 0);
+        Point ocvPOut4 = new Point(0, resultHeight);
+        Point ocvPOut3 = new Point(resultWidth, resultHeight);
+        Point ocvPOut2 = new Point(resultWidth, 0);
 
-        Core.mixChannels(sourceChannels, outChannel, new MatOfInt(channelNum,0));
+        if (inputMat.height() > inputMat.width()) {
+            // int temp = resultWidth;
+            // resultWidth = resultHeight;
+            // resultHeight = temp;
 
-        Core.merge(outChannel, out);
-    }*/
+            ocvPOut2 = new Point(0, 0);
+            ocvPOut1 = new Point(0, resultHeight);
+            ocvPOut4 = new Point(resultWidth, resultHeight);
+            ocvPOut3 = new Point(resultWidth, 0);
+        }
 
-    MatOfPoint approxPolyDP(MatOfPoint curve, double epsilon, boolean closed) {
-        MatOfPoint2f tempMat=new MatOfPoint2f();
+        Mat outputMat = new Mat(resultWidth, resultHeight, CvType.CV_8UC4);
 
-        Imgproc.approxPolyDP(new MatOfPoint2f(curve.toArray()), tempMat, epsilon, closed);
+        List<Point> dest = new ArrayList<Point>();
+        dest.add(ocvPOut1);
+        dest.add(ocvPOut2);
+        dest.add(ocvPOut3);
+        dest.add(ocvPOut4);
 
-        return new MatOfPoint(tempMat.toArray());
+        Mat endM = Converters.vector_Point2f_to_Mat(dest);
+
+        Mat perspectiveTransform = Imgproc.getPerspectiveTransform(startM, endM);
+
+        Imgproc.warpPerspective(inputMat, outputMat, perspectiveTransform, new Size(resultWidth, resultHeight), Imgproc.INTER_CUBIC);
+
+        return outputMat;
     }
 }
+

@@ -5,14 +5,14 @@
     android:layout_height="match_parent" >
 
     <org.opencv.android.JavaCameraView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-
-        android:visibility="visible"
-        android:screenOrientation="portrait"
         android:id="@+id/tutorial1_activity_java_surface_view"
-        opencv:show_fps="true"
-        opencv:camera_id="any"/>
+        android:layout_width="match_parent"
+
+        android:layout_height="match_parent"
+        android:screenOrientation="portrait"
+        android:visibility="visible"
+        opencv:camera_id="any"
+        opencv:show_fps="true" />
         <!--android:layout_below="@+id/text1"/>-->
 
     <!--<TextView
