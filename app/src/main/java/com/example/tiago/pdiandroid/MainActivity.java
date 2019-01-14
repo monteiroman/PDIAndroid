@@ -69,30 +69,32 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     private static final String TAG = "OCVSample::Activity";
     private static final int SUBMATWIDTH = 500;
     private static final int SUBMATHEIGHT = 300;
-    private int w, h;
+    private int  w, h;
     private CameraBridgeViewBase mOpenCvCameraView;
-    TextView tvName;
-    Scalar RED = new Scalar(255, 0, 0);
-    Scalar GREEN = new Scalar(0, 255, 0);
-    FeatureDetector detector;
-    DescriptorExtractor descriptor;
-    DescriptorMatcher matcher;
-    Mat descriptors2,descriptors1;
-    Mat img1;
-    MatOfKeyPoint keypoints1,keypoints2;
-    Mat grad_X = new Mat();
-    Mat grad_Y = new Mat();
-    Mat abs_grad = new Mat();
-    Mat thres_out = new Mat();
-    Mat morph_out = new Mat();
-    Mat aInputFrame = new Mat();
-    Mat bInputFrame = new Mat();
-    Mat cInputFrame = new Mat();
-    List<MatOfPoint> squares = new ArrayList<MatOfPoint>();
-    int thresh = 50, N = 11;
+//    TextView tvName;
+//    Scalar RED = new Scalar(255, 0, 0);
+//    Scalar GREEN = new Scalar(0, 255, 0);
+//    FeatureDetector detector;
+//    DescriptorExtractor descriptor;
+//    DescriptorMatcher matcher;
+//    Mat descriptors2,descriptors1;
+//    Mat img1;
+//    MatOfKeyPoint keypoints1,keypoints2;
+//    Mat grad_X = new Mat();
+//    Mat grad_Y = new Mat();
+//    Mat abs_grad = new Mat();
+//    Mat thres_out = new Mat();
+//    Mat morph_out = new Mat();
+    private Mat myInputFrame = new Mat();
+    private Mat warpedFrame = new Mat();
+    private Mat outputFrame = new Mat();
+    private Mat sub = new Mat();
+
+//    List<MatOfPoint> squares = new ArrayList<MatOfPoint>();
+//    int thresh = 50, N = 11;
     Mat smallerImg, gray, gray0;
 
-    VideoCapture mCamera;
+//    VideoCapture mCamera;
     TextView txtView;
     Bitmap myBitmap;
 
@@ -195,6 +197,8 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     public void onCameraViewStarted(int width, int height) {
         w = width;
         h = height;
+        Log.i(TAG, "Width: " + w);
+        Log.i(TAG, "Height: " + h);
     }
 
     public void onCameraViewStopped() {
@@ -203,16 +207,21 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
-        aInputFrame = inputFrame.rgba();
-        bInputFrame = aInputFrame.clone();
-        cInputFrame = aInputFrame.clone();
-        Mat aux;
+        myInputFrame = inputFrame.rgba();
+//        aInputFrame.copyTo(bInputFrame);
+//        myInputFrame.copyTo(outputFrame);
+        myInputFrame.copyTo(warpedFrame);
+
+
+//        bInputFrame = aInputFrame.clone();
+//        cInputFrame = aInputFrame.clone();
+//        Mat aux;
 
         //1-------------If i want to detect the barcode
         //aux = detectBarCode(aInputFrame.clone());
         //findSquares(aux, squares);
 
-        //2-------------If I dont want to detect the barcode
+        //2-------------If I don't want to detect the barcode
         //findSquares(inputFrame.gray(), squares);
 
         //Imgproc.drawContours(aInputFrame, squares, -1, new Scalar(0,255,0), 3);
@@ -237,7 +246,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
 
         if(barcodes.size()==0){
-            //txtView.setText("No se detecto un codigo");
+            //txtView.setText("No se detectó un codigo");
             Log.d(TAG, "No se econtró codigo");
         }else {
             Barcode thisCode = barcodes.valueAt(0);
@@ -249,27 +258,27 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
         }
         */
 
-        Imgproc.cvtColor(aInputFrame, aInputFrame, Imgproc.COLOR_BGR2GRAY);
-
-        //convert the image to black and white does (8 bit)
-        Imgproc.Canny(aInputFrame, aInputFrame, 50, 50);
-
-        //apply gaussian blur to smoothen lines of dots
-        Imgproc.GaussianBlur(aInputFrame, aInputFrame, new  org.opencv.core.Size(5, 5), 5);
-
-        //find the contours
+//        //4-------------Another way to detect squares and warp them.
+//        Imgproc.cvtColor(aInputFrame, aInputFrame, Imgproc.COLOR_BGR2GRAY);
+//
+//        //convert the image to black and white does (8 bit)
+//        Imgproc.Canny(aInputFrame, aInputFrame, 50, 50);
+//
+//        //apply gaussian blur to smoothen lines of dots
+//        Imgproc.GaussianBlur(aInputFrame, aInputFrame, new  org.opencv.core.Size(5, 5), 5);
+//
+//        //find the contours
+//        List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
+//        Imgproc.findContours(aInputFrame, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
         List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
-        Imgproc.findContours(aInputFrame, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+        myFindContours(myInputFrame.clone(), contours);
 
 
 
         if (!contours.isEmpty()) {
 
-
             double maxArea = -1;
-            MatOfPoint temp_contour = contours.get(0);  // the largest is at the
-                                                        // index 0 for starting
-                                                        // point
+            MatOfPoint temp_contour;
             MatOfPoint2f approxCurve = new MatOfPoint2f();
 
             for (int idx = 0; idx < contours.size(); idx++) {
@@ -291,40 +300,45 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
                 }
             }
 
-            //Imgproc.cvtColor(imgSource, imgSource, Imgproc.COLOR_BayerBG2RGB);
-            //Mat sourceImage = Highgui.imread(fileName, Highgui.CV_LOAD_IMAGE_UNCHANGED);
-            double[] temp_double;
-            temp_double = approxCurve.get(0, 0);
-            Point p1 = new Point(temp_double[0], temp_double[1]);
-            // Core.circle(imgSource,p1,55,new Scalar(0,0,255));
-            // Imgproc.warpAffine(sourceImage, dummy, rotImage,sourceImage.size());
-            temp_double = approxCurve.get(1, 0);
-            Point p2 = new Point(temp_double[0], temp_double[1]);
-            // Core.circle(imgSource,p2,150,new Scalar(255,255,255));
-            temp_double = approxCurve.get(2, 0);
-            Point p3 = new Point(temp_double[0], temp_double[1]);
-            // Core.circle(imgSource,p3,200,new Scalar(255,0,0));
-            temp_double = approxCurve.get(3, 0);
-            Point p4 = new Point(temp_double[0], temp_double[1]);
-            // Core.circle(imgSource,p4,100,new Scalar(0,0,255));
-            List<Point> source = new ArrayList<Point>();
-            source.add(p1);
-            source.add(p2);
-            source.add(p3);
-            source.add(p4);
-            Mat startM = Converters.vector_Point2f_to_Mat(source);
+            if (maxArea>0) {
+                //Imgproc.cvtColor(imgSource, imgSource, Imgproc.COLOR_BayerBG2RGB);
+                //Mat sourceImage = Highgui.imread(fileName, Highgui.CV_LOAD_IMAGE_UNCHANGED);
+                double[] temp_double;
+                temp_double = approxCurve.get(0, 0);
+                Point p1 = new Point(temp_double[0], temp_double[1]);
+                // Core.circle(imgSource,p1,55,new Scalar(0,0,255));
+                // Imgproc.warpAffine(sourceImage, dummy, rotImage,sourceImage.size());
+                temp_double = approxCurve.get(1, 0);
+                Point p2 = new Point(temp_double[0], temp_double[1]);
+                // Core.circle(imgSource,p2,150,new Scalar(255,255,255));
+                temp_double = approxCurve.get(2, 0);
+                Point p3 = new Point(temp_double[0], temp_double[1]);
+                // Core.circle(imgSource,p3,200,new Scalar(255,0,0));
+                temp_double = approxCurve.get(3, 0);
+                Point p4 = new Point(temp_double[0], temp_double[1]);
+                // Core.circle(imgSource,p4,100,new Scalar(0,0,255));
+                List<Point> source = new ArrayList<Point>();
+                source.add(p1);
+                source.add(p2);
+                source.add(p3);
+                source.add(p4);
+                Mat startM = Converters.vector_Point2f_to_Mat(source);
 
-            //if (maxArea > 0)
-                bInputFrame = warp(bInputFrame, startM);
-
-            //Highgui.imwrite("corrected.jpg", result);
-
-
+                warpedFrame = warp(myInputFrame.clone(), startM, w, h);
+            }
         }
 
-        cInputFrame = subMat(cInputFrame, bInputFrame);
+//        Imgproc.cvtColor(bInputFrame, bInputFrame, Imgproc.COLOR_RGB2GRAY);
+//        Imgproc.threshold(bInputFrame, bInputFrame, 90, 255, Imgproc.THRESH_BINARY);
+//        Imgproc.cvtColor(bInputFrame, bInputFrame, Imgproc.COLOR_GRAY2RGB);
+//        Imgproc.erode(warpedFrame, warpedFrame, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2,2)));
+//        Imgproc.dilate(warpedFrame, warpedFrame, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(1,1)));
 
-        return cInputFrame;
+        detectBarcode (myInputFrame);
+
+        outputFrame = subMat(myInputFrame, warpedFrame);
+
+        return outputFrame;
     }
 
 //    Mat detectBarCode (Mat aInputFrame){
@@ -358,8 +372,8 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 //    }
 
 
-    // returns sequence of squares detected on the image.
-    // the sequence is stored in the specified memory storage
+//    // returns sequence of squares detected on the image.
+//    // the sequence is stored in the specified memory storage
 //    void findSquares( Mat image, List<MatOfPoint> squares )
 //    {
 //        squares.clear();
@@ -426,9 +440,9 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 //        }
 //    }
 
-    // helper function:
-    // finds a cosine of angle between vectors
-    // from pt0->pt1 and from pt0->pt2
+//    // helper function:
+//    // finds a cosine of angle between vectors
+//    // from pt0->pt1 and from pt0->pt2
 //    double angle( Point pt1, Point pt2, Point pt0 ) {
 //        double dx1 = pt1.x - pt0.x;
 //        double dy1 = pt1.y - pt0.y;
@@ -461,34 +475,33 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
     Mat subMat (Mat bigMat, Mat smallMat){
         Rect roi = new Rect(50, 50, SUBMATWIDTH, SUBMATHEIGHT);
-        Mat sub = bigMat.submat(roi);
+        sub = bigMat.submat(roi);
+        Imgproc.resize(smallMat, smallMat, new Size(SUBMATWIDTH, SUBMATHEIGHT));
         smallMat.copyTo(sub);
         return bigMat;
     }
 
-    public static Mat warp(Mat inputMat, Mat startM) {
+    public static Mat warp(Mat inputMat, Mat startM, int resultWidth, int resultHeight) {
 
-        int resultWidth = SUBMATWIDTH;
-        int resultHeight = SUBMATHEIGHT;
-//        int resultWidth = 1440;
-//        int resultHeight = 1080;
+//        int resultWidth = SUBMATWIDTH;
+//        int resultHeight = SUBMATHEIGHT;
 //        int resultWidth = 1200;
 //        int resultHeight = 680;
 
-        Point ocvPOut1 = new Point(0, 0);
-        Point ocvPOut4 = new Point(0, resultHeight);
-        Point ocvPOut3 = new Point(resultWidth, resultHeight);
-        Point ocvPOut2 = new Point(resultWidth, 0);
+        Point ocvPOut4 = new Point(0, 0);
+        Point ocvPOut3 = new Point(0, resultHeight);
+        Point ocvPOut2 = new Point(resultWidth, resultHeight);
+        Point ocvPOut1 = new Point(resultWidth, 0);
 
         if (inputMat.height() > inputMat.width()) {
             // int temp = resultWidth;
             // resultWidth = resultHeight;
             // resultHeight = temp;
 
-            ocvPOut2 = new Point(0, 0);
-            ocvPOut1 = new Point(0, resultHeight);
-            ocvPOut4 = new Point(resultWidth, resultHeight);
-            ocvPOut3 = new Point(resultWidth, 0);
+            ocvPOut1 = new Point(0, 0);
+            ocvPOut4 = new Point(0, resultHeight);
+            ocvPOut3 = new Point(resultWidth, resultHeight);
+            ocvPOut2 = new Point(resultWidth, 0);
         }
 
         Mat outputMat = new Mat(resultWidth, resultHeight, CvType.CV_8UC4);
@@ -507,5 +520,50 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
         return outputMat;
     }
+
+    public void myFindContours (Mat image, List<MatOfPoint> contours){
+        contours.clear();
+
+        Imgproc.cvtColor(image, image, Imgproc.COLOR_BGR2GRAY);
+
+        //convert the image to black and white does (8 bit)
+        Imgproc.Canny(image, image, 50, 50);
+
+        //apply gaussian blur to smoothen lines of dots
+        Imgproc.GaussianBlur(image, image, new  org.opencv.core.Size(5, 5), 5);
+
+        //find the contours
+        Imgproc.findContours(image, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+    }
+
+    public void detectBarcode (Mat image){
+        myBitmap = Bitmap.createBitmap(image.cols(),  image.rows(),Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(image, myBitmap);
+
+        BarcodeDetector detector = new BarcodeDetector.Builder(getApplicationContext())
+                .setBarcodeFormats(Barcode.DATA_MATRIX | Barcode.QR_CODE)
+                .build();
+        if(!detector.isOperational()){
+            txtView.setText("Could not set up the detector!");
+        }
+
+        Frame frame = new Frame.Builder().setBitmap(myBitmap).build();
+        SparseArray<Barcode> barcodes = detector.detect(frame);
+
+
+        if(barcodes.size()==0){
+            //txtView.setText("No se detecto un codigo");
+            Log.d(TAG, "No se econtró codigo");
+        }else {
+            Barcode thisCode = barcodes.valueAt(0);
+            //txtView.setText(thisCode.rawValue);
+            Log.d(TAG, thisCode.rawValue);
+            final Intent intent = new Intent(this, ShowText.class);
+            intent.putExtra("text", thisCode.rawValue);
+            startActivity(intent);
+        }
+
+    }
+
 }
 
