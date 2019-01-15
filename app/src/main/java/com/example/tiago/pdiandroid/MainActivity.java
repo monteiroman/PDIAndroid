@@ -88,6 +88,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
     private Mat myInputFrame = new Mat();
     private Mat warpedFrame = new Mat();
     private Mat outputFrame = new Mat();
+    private Mat myInputFrameGray = new Mat();
     private Mat sub = new Mat();
 
 //    List<MatOfPoint> squares = new ArrayList<MatOfPoint>();
@@ -270,6 +271,8 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 //        //find the contours
 //        List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
 //        Imgproc.findContours(aInputFrame, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+
+//        -----------------------------------------------------------------------------
         List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
         myFindContours(myInputFrame.clone(), contours);
 
@@ -292,7 +295,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
                     int contourSize = (int) temp_contour.total();
                     MatOfPoint2f approxCurve_temp = new MatOfPoint2f();
                     Imgproc.approxPolyDP(new_mat, approxCurve_temp, contourSize * 0.05, true);
-                    
+
                     if (approxCurve_temp.total() == 4) {
                         maxArea = contourarea;
                         approxCurve = approxCurve_temp;
@@ -328,17 +331,14 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
             }
         }
 
-//        Imgproc.cvtColor(bInputFrame, bInputFrame, Imgproc.COLOR_RGB2GRAY);
-//        Imgproc.threshold(bInputFrame, bInputFrame, 90, 255, Imgproc.THRESH_BINARY);
-//        Imgproc.cvtColor(bInputFrame, bInputFrame, Imgproc.COLOR_GRAY2RGB);
-//        Imgproc.erode(warpedFrame, warpedFrame, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2,2)));
-//        Imgproc.dilate(warpedFrame, warpedFrame, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(1,1)));
 
-        detectBarcode (myInputFrame);
+        detectBarcode (warpedFrame);
 
         outputFrame = subMat(myInputFrame, warpedFrame);
 
         return outputFrame;
+
+//        -----------------------------------------------------------------------------
     }
 
 //    Mat detectBarCode (Mat aInputFrame){
@@ -541,7 +541,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
         Utils.matToBitmap(image, myBitmap);
 
         BarcodeDetector detector = new BarcodeDetector.Builder(getApplicationContext())
-                .setBarcodeFormats(Barcode.DATA_MATRIX | Barcode.QR_CODE)
+                .setBarcodeFormats(Barcode.DATA_MATRIX | Barcode.PDF417)
                 .build();
         if(!detector.isOperational()){
             txtView.setText("Could not set up the detector!");
