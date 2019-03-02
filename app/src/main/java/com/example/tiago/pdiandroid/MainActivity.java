@@ -67,8 +67,8 @@ Usar matchShapes
 public class MainActivity extends Activity implements CameraBridgeViewBase.CvCameraViewListener2{
 
     private static final String TAG = "OCVSample::Activity";
-    private static final int SUBMATWIDTH = 500;
-    private static final int SUBMATHEIGHT = 300;
+    private static final int SUBMATWIDTH = 640;
+    private static final int SUBMATHEIGHT = 480;
     private int  w, h;
     private CameraBridgeViewBase mOpenCvCameraView;
 //    TextView tvName;
@@ -333,6 +333,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
 
         detectBarcode (warpedFrame);
+//        detectBarcode (myInputFrame);
 
         outputFrame = subMat(myInputFrame, warpedFrame);
 
@@ -474,7 +475,7 @@ public class MainActivity extends Activity implements CameraBridgeViewBase.CvCam
 
 
     Mat subMat (Mat bigMat, Mat smallMat){
-        Rect roi = new Rect(50, 50, SUBMATWIDTH, SUBMATHEIGHT);
+        Rect roi = new Rect(10, 10, SUBMATWIDTH, SUBMATHEIGHT);
         sub = bigMat.submat(roi);
         Imgproc.resize(smallMat, smallMat, new Size(SUBMATWIDTH, SUBMATHEIGHT));
         smallMat.copyTo(sub);
